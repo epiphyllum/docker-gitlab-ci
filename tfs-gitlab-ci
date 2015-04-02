@@ -1,0 +1,113 @@
+#!/bin/bash
+
+###########################################################################
+# common
+IP=172.17.88.9
+MASK=24
+GATEWAY=172.17.42.1
+VERSION=7.9.1
+
+
+# gitlab-ci
+GITLAB_CI_HOST=gitlab-ci.tfs.com
+GITLAB_CI_PORT=80
+GITLAB_CI_SUPPORT=gitlab-ci@tfs.com
+GITLAB_CI_EMAIL=18874881230@163.com
+
+GITLAB_URL=http://gitlab.tfs.com
+GITLAB_APP_ID=a7d1009834f636acf8ee6c1dd1aa2ebe26b5678a430c3d81f3ff8fb823858fc3
+GITLAB_APP_SECRET=de7e41af8738eb85f4cd66b8fd96d5605e837fe50eecc485e11eb20428126e81
+
+# db
+DB_NAME=gitlab_ci_production
+DB_USER=mysql
+DB_PASS=mysql
+
+# mail related
+SMTP_USER=18874881230
+SMTP_PASS=wyqler.1234
+SMTP_DOMAIN=163.com
+SMTP_HOST=smtp.163.com
+SMTP_PORT=25
+SMTP_STARTTLS=true
+SMTP_OPENSSL_VERIFY_MODE=none
+
+# data and log
+VOLUME_DATA=$HOME/appstore/tfs/gitlab-ci/data
+VOLUME_LOG=$HOME/appstore/tfs/gitlab-ci/log
+###########################################################################
+
+VERSION=${VERSION:-"latest"};
+
+if [ $# -lt 1 ]; then
+    echo "Usage: tfs-gitlab-ci run|start|stop|clean";
+    exit 0;
+fi
+
+# 启动容器
+function start_docker {
+    sudo docker start tfs-gitlab-ci;
+    sudo pipework docker0 tfs-gitlab-ci $IP/$MASK@$GATEWAY;
+}
+
+# 停止容器
+function stop_docker {
+    sudo docker stop tfs-gitlab-ci;
+}
+
+# 创建容器+初始化+启动容器
+function run_docker {
+    #
+    # 这里的--link名称别名必须是postgresql redisio
+    #
+    echo "run docker using image[hary/gitlab-ci] version[$VERSION]";
+    sudo docker run -i -t -d --name=tfs-gitlab-ci --hostname=tfs-gitlab-ci \
+    -p 20080:$GITLAB_CI_PORT \
+    -e "GITLAB_CI_EMAIL=$GITLAB_CI_EMAIL" \
+    -e "GITLAB_CI_SUPPORT=$GITLAB_CI_SUPPORT" \
+    -e "GITLAB_CI_HOST=$GITLAB_CI_HOST" \
+\
+    -e "GITLAB_URL=$GITLAB_URL" \
+    -e "GITLAB_APP_ID=$GITLAB_APP_ID" \
+    -e "GITLAB_APP_SECRET=$GITLAB_APP_SECRET" \
+\
+    -e "SMTP_DOMAIN=$SMTP_DOMAIN" \
+    -e "SMTP_USER=$SMTP_USER" \
+    -e "SMTP_PASS=$SMTP_PASS" \
+    -e "SMTP_HOST=$SMTP_HOST" \
+    -e "SMTP_PORT=$SMTP_PORT" \
+    -e "SMTP_STARTTLS=$SMTP_STARTTLS" \
+\
+    -e "DB_NAME=$DB_NAME" \
+    -e "DB_USER=$DB_USER" \
+    -e "DB_PASS=$DB_PASS" \
+\
+    --link tfs-mysql:mysql \
+    --link tfs-redis:redisio \
+\
+    -v $VOLUME_DATA:/home/gitlab_ci/data \
+    -v $VOLUME_LOG:/var/log/gitlab-ci \
+    hary/gitlab-ci:$VERSION;
+
+    sudo pipework docker0 tfs-gitlab-ci $IP/$MASK@$GATEWAY;
+    echo "IP address is[$IP/$MASK] and gateway[$GATEWAY]";
+}
+
+
+#####################################################################################
+# main
+#####################################################################################
+case $1 in
+   # create container and initialize it and running
+   run) run_docker;;
+
+   # docker start
+   start) start_docker;;
+
+   # docker stop_docker
+   stop) stop_docker;;
+
+    # clean volume data
+   clean) sudo rm -fr $VOLUME_DATA/* $VOLUME_LOG/* ;;
+esac
+
